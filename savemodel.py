@@ -33,109 +33,57 @@ def strip(x: str):
     assert y.view(-1)[0].dtype == torch.float32
     return y.numpy()
 
-if len(sys.argv) > 2:
-    outfile = sys.argv[2]
-else:
-    outfile = "msmarco-distilbert-base-dot-prod-v3_converted_full.bin"
+outfile = sys.argv[2] if len(sys.argv) > 2 else "msmarco-distilbert-base-dot-prod-v3_converted_full.bin"
 
-with open(outfile,mode='wb') as of:
-        #write up front stuff
-        header = struct.pack(
-        'iiiiiii',
+with open(outfile, mode='wb') as of:
+    header_format = 'iiiiiii'
+    header_values = [
         hparams['dim'], hparams['hidden_dim'], hparams['n_layers'],
-            hparams['n_heads'], 0, len(encoder['model']['vocab']),
-            hparams['max_position_embeddings'],
-            )
-        of.write(header)
+        hparams['n_heads'], 0, len(encoder['model']['vocab']),
+        hparams['max_position_embeddings']
+    ]
+    header = struct.pack(header_format, *header_values)
+    of.write(header)
 
-        w = strip('embeddings.word_embeddings.weight')
+    layer_names = [
+        'embeddings.word_embeddings.weight',
+        'embeddings.position_embeddings.weight',
+        'embeddings.LayerNorm.weight',
+        'embeddings.LayerNorm.bias'
+    ]
+
+    for l in range(hparams['n_layers']):
+        layer_names.extend([
+            f'transformer.layer.{l}.attention.q_lin.weight',
+            f'transformer.layer.{l}.attention.q_lin.bias',
+            f'transformer.layer.{l}.attention.k_lin.weight',
+            f'transformer.layer.{l}.attention.k_lin.bias',
+            f'transformer.layer.{l}.attention.v_lin.weight',
+            f'transformer.layer.{l}.attention.v_lin.bias',
+            f'transformer.layer.{l}.attention.out_lin.weight',
+            f'transformer.layer.{l}.attention.out_lin.bias',
+            f'transformer.layer.{l}.sa_layer_norm.weight',
+            f'transformer.layer.{l}.sa_layer_norm.bias',
+            f'transformer.layer.{l}.ffn.lin1.weight',
+            f'transformer.layer.{l}.ffn.lin1.bias',
+            f'transformer.layer.{l}.ffn.lin2.weight',
+            f'transformer.layer.{l}.ffn.lin2.bias',
+            f'transformer.layer.{l}.output_layer_norm.weight',
+            f'transformer.layer.{l}.output_layer_norm.bias'
+        ])
+
+    for name in layer_names:
+        w = strip(name)
         of.write(memoryview(w))
 
-        w = strip('embeddings.position_embeddings.weight')
-        of.write(memoryview(w))
+    # Linear weights at the end
+    print("linear.weight")
+    y = st_model[2].state_dict()['linear.weight']
+    assert y.view(-1)[0].dtype == torch.float32
+    of.write(memoryview(y.numpy()))
 
-        w = strip('embeddings.LayerNorm.weight')
-        of.write(memoryview(w))
 
-        w = strip('embeddings.LayerNorm.bias')
-        of.write(memoryview(w))
-
-        layers = hparams['n_layers']
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.q_lin.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.q_lin.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.k_lin.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.k_lin.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.v_lin.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.v_lin.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.out_lin.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.attention.out_lin.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.sa_layer_norm.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.sa_layer_norm.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.ffn.lin1.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.ffn.lin1.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.ffn.lin2.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.ffn.lin2.bias')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.output_layer_norm.weight')
-            of.write(memoryview(w))
-
-        for l in range(layers):
-            w = strip(f'transformer.layer.{l}.output_layer_norm.bias')
-            of.write(memoryview(w))
-
-        # just stick the linear weights at the end
-        print("linear.weight")
-        y = st_model[2].state_dict()['linear.weight']
-        assert y.view(-1)[0].dtype == torch.float32
-        of.write(memoryview(y.numpy()))
-
-if len(sys.argv) > 3:
-    vname = sys.argv[3]
-else:
-    vname = "tokenizer.bin"
+vname = sys.argv[3] if len(sys.argv) > 3 else "tokenizer.bin"
 
 vocab = encoder["model"]["vocab"]
 # write out vocab
