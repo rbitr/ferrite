@@ -632,8 +632,8 @@ contains
                 integer :: pos
 
                 character(26), parameter :: alpha = 'abcdefghijklmnopqrstuvwxyz'
-                character(35), parameter  :: punct = '[!"#$%&\()*+,-./:;<=>?@\\^_`{|}~])x'
-                character(10), parameter :: numbers = '0123456789'
+                character(35)  :: punct = '[!"#$%&\()*+,-./:;<=>?@\\^_`{|}~])x'
+                character(10) :: numbers = '0123456789'
                 
                 ! is there another way to add the single quote?
                 punct(35:35) = "'"
