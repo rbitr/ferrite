@@ -60,9 +60,10 @@ module arg_parse
                 character(:), allocatable :: model_file
                 character(:), allocatable :: prompt
                 character(:), allocatable :: tokenizer
+                character(:), allocatable :: filename
                 logical :: verbose
                 integer :: n
-                logical :: single_line, quiet
+                logical :: single_line, quiet, time
         end type args
 
         contains
@@ -83,6 +84,8 @@ module arg_parse
                         arg_values%tokenizer = "tokenizer.bin"
                         arg_values%single_line = .false.
                         arg_values%quiet = .false.
+                        arg_values%filename = ""
+                        arg_values%time = .false.
 
                         num_args = command_argument_count()
 
@@ -115,6 +118,12 @@ module arg_parse
                                                 call get_command_argument(i+1, arg)
                                                 read(arg,*) arg_values%n
                                                 i = i + 2
+                                                case ('-f', '--filename')
+                                                ! text file with a prompt on each line
+                                                call get_command_argument(i+1, arg)
+                                                arg_values%filename = trim(arg)
+
+                                                i = i + 2
                                                 case ('-v', '--verbose')
                                                 ! print additional information
                                                 arg_values%verbose = .true.
@@ -126,6 +135,10 @@ module arg_parse
                                                 case ('-q', '--quiet')
                                                         ! don't print embedding
                                                 arg_values%quiet = .true.
+                                                i = i + 1
+                                                case ('--time')
+                                                        ! display timings
+                                                arg_values%time = .true.
                                                 i = i + 1
                                                 case default
                                                 print *, 'Unrecognized option:', trim(arg)
@@ -156,17 +169,21 @@ program transformer
 
         type (args) :: arg_values
         character(:), allocatable :: prompt
-        logical :: verbose
+        logical :: verbose, time
 
         real(kind=wp) :: score
-        integer :: tok_len, max_len, n, l
+        integer :: tok_len, max_len, n, p, l
         !integer :: vocab_size = 32000
         character(:), allocatable :: tmpstr
         character(:), dimension(:), allocatable :: vocab
         real(kind=wp),allocatable :: y(:), scores(:)
         integer, allocatable :: prompt_tokens(:)
         integer, allocatable :: vocab_len(:)
-
+        integer, parameter :: max_prompt_len = 1024
+        character(:), dimension(:), allocatable :: prompts
+        character(len=max_prompt_len) :: temp_prompt
+        integer :: tfid, ierr, num_lines
+        real(kind=wp) :: t_start, t_end
 
         character(:), dimension(:), allocatable :: simple_tokens
         !integer, allocatable :: prompt_tokens
@@ -174,14 +191,18 @@ program transformer
 
         call parse_args(arg_values)
 
-        if (arg_values%prompt .eq. "") then
+        if (arg_values%prompt == "" .and. arg_values%filename == "") then
+                !print *, arg_values%filename
                 print *, "prompt required"
                 stop
         end if
 
         verbose = arg_values%verbose
+        time = arg_values%time
 
         msize = 0
+        
+        t_start = time_ms()
         ! open the model file 
         open(UNIT=5, FILE=arg_values%model_file, FORM="UNFORMATTED",&
                 &ACCESS="STREAM", STATUS="OLD", POSITION="REWIND", ACTION="READ")
@@ -385,13 +406,54 @@ program transformer
                 write(*,"(A,A)") "Token 4081 is ", vocab(4081)
         end if
 
-        ! tokenize prompt
-        simple_tokens = simple_tokenize(arg_values%prompt)
 
-        prompt_tokens = sp_tokenize(arg_values%prompt)
+        ! if there is a prompt, read the prompt and make a length 1 list
+        ! if there is a file, read the lines into a list
+        
+        if (arg_values%prompt /= "") then
+                allocate(character(len=max_prompt_len) ::  prompts(1))
+                prompts(1) = arg_values%prompt
+        
+        else if (arg_values%filename /= "") then
+
+                tfid = 5
+                open(unit=tfid,file=arg_values%filename)
+                ierr = 0
+                num_lines = -1
+                do while (ierr == 0)
+                        num_lines = num_lines + 1
+                        read(tfid,*,iostat=ierr) temp_prompt
+                end do
+
+                if (verbose) then
+                        write(*,'(A,I0,A)') "Read ", num_lines, " lines"
+                end if
+
+                allocate(character(len=max_prompt_len) ::  prompts(num_lines))
+
+                rewind(tfid)
+                do p = 1,num_lines
+                read(tfid, '(A)') prompts(p)
+                end do
+        
+        end if
+        
+        t_end = time_ms()
+
+        if (time) then
+                print *, "Load time in seconds: ", (t_end-t_start)/1000
+        end if  
+        
+        ! tokenize prompt
+        !simple_tokens = simple_tokenize(arg_values%prompt)
+
+        t_start = time_ms()
+        do p=1,size(prompts)
+        prompt_tokens = sp_tokenize(trim(prompts(p)))
 
 
         if (verbose) then 
+        simple_tokens = simple_tokenize(trim(prompts(p)))
         do n=1,size(simple_tokens)
                 print *, "simple token: ", simple_tokens(n)
                 print *, "wordpiece tokens: ", encode_word(simple_tokens(n))
@@ -405,7 +467,7 @@ program transformer
         y = dbert(prompt_tokens,weights,cfg)
         
         if (arg_values%quiet) then
-                stop
+                cycle
         end if 
 
         if (arg_values%single_line) then
@@ -415,6 +477,14 @@ program transformer
         else
                 print *, y
         end if
+
+        end do
+        t_end = time_ms()
+
+        if (time) then
+                print *, "Total inference time in seconds: ", (t_end-t_start)/1000
+        end if
+
 
 contains
 
@@ -573,7 +643,7 @@ contains
                         i = i - 1
                         end do  
                         
-                        if ( i .eq. 0) then
+                        if ( i == 0) then
                                 deallocate(tokens)
                                 tokens = ["UNK"]
                                 return 
@@ -626,7 +696,7 @@ contains
 
                 pos = 1
 
-                if (index(punct,ltext(pos:pos)) > 0 .and. pos .le. len_trim(ltext)) then
+                if (index(punct,ltext(pos:pos)) > 0 .and. pos <= len_trim(ltext)) then
                         !print *, index(punct,ltext(pos:pos))
                         next_token = ltext(pos:pos)
                         !if (verbose) then
@@ -637,9 +707,9 @@ contains
                         cycle 
                 end if
                 
-                if (index(alpha,ltext(pos:pos)) > 0 .and. pos .le. len_trim(ltext)) then !next char is alphabet
+                if (index(alpha,ltext(pos:pos)) > 0 .and. pos <= len_trim(ltext)) then !next char is alphabet
                 
-                do while(index(alpha,ltext(pos:pos)) > 0 .and. pos .le. len_trim(ltext))
+                do while(index(alpha,ltext(pos:pos)) > 0 .and. pos <= len_trim(ltext))
                         pos = pos + 1
                 end do
 
@@ -656,8 +726,8 @@ contains
                 ! fortran 2003?
                 tokens = [tokens, next_token]
 
-                else if (index(numbers,ltext(pos:pos)) > 0 .and. pos .le. len_trim(ltext)) then ! next char is number
-                do while(index(numbers,ltext(pos:pos)) > 0 .and. pos .le. len_trim(ltext))
+                else if (index(numbers,ltext(pos:pos)) > 0 .and. pos <= len_trim(ltext)) then ! next char is number
+                do while(index(numbers,ltext(pos:pos)) > 0 .and. pos <= len_trim(ltext))
                         pos = pos + 1
                 end do
 
@@ -702,5 +772,13 @@ contains
         end do
 
         end function to_lower
+
+        function time_ms() result(t_ms)
+                real(kind=wp) :: t_ms
+                integer(4) :: ms
+                !call cpu_time(t_ms)
+                call system_clock(ms)
+                t_ms = real(ms)
+        end function
 
 end program

@@ -2,3 +2,4 @@
 tx
 *.mod
 *.bin
+!benchmark
