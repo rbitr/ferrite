@@ -1,5 +1,9 @@
 from sentence_transformers import SentenceTransformer
 from time import time
+import torch
+
+#change as desired
+#torch.set_num_threads(1)
 
 if __name__ == "__main__":
 
