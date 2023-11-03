@@ -1,4 +1,4 @@
-#Python "transformers" code for comparison
+## Python "transformers" code for comparison
 
 Summary: I compared total calculation time for embeddings on the 21 strings in `../sentence_ex.tx` between HF transformers and transformers.f90 on an (old) Macbook and slightly newer intel/linux laptop. This code is heavily dependent on `matmul` so we expect the linear algebra backend to be important. On the intel machine, the inference runs 4-5 times faster in python vs the current fortran implementation with openblas. On the mac, the Accelerate framework + fortran is neatly 2x faster than python. Python generally sucks at the initial load time of the weights vs. fortran. 
 
