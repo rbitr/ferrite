@@ -19,6 +19,7 @@ sys	0m2.265s
 Compiled with O3 etc.
 
 ```bash
+$ gfortran-10 -O3 -march=native -ffast-math -funroll-loops transformer.f90 -o tx
 $ time ./tx -m msmarco-distilbert-base-dot-prod-v3.bin -q -f sentence_ex.txt --time
  Load time in seconds:    9.60000008E-02
  Total inference time in seconds:    4.36800003    
@@ -31,7 +32,7 @@ sys	0m0.100s
 With external blas library
 
 ```bash
-$ fortran-10 -O3 -march=native -ffast-math -funroll-loops transformer.f90 -fexternal-blas -lopenblas -o tx
+$ gfortran-10 -O3 -march=native -ffast-math -funroll-loops transformer.f90 -fexternal-blas -lopenblas -o tx
 $ time ./tx -m msmarco-distilbert-base-dot-prod-v3.bin -q -f sentence_ex.txt --time
  Load time in seconds:   0.128000006    
  Total inference time in seconds:    1.28000009    
