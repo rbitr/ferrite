@@ -6,33 +6,114 @@ To that end, as a complement to the [llama.f90](rbitr/llama.f90) Fortran LLM, th
 
 I plan to evolve this to make sure it can work with general transformer models, and add performance optimization as required. That said, I don't want to add any abstraction so I only want to add generalizations that don't obscure what is going on. The code can easily be adapted for architectural variations.
 
-## Setup
+## Setup and running
+
+```bash
+# clone the repo
+git clone https://github.com/rbitr/ferrite
+cd ferrite
+# download a model
+wget https://huggingface.co/SDFASDGA/llm/resolve/main/msmarco-distilbert-base-dot-prod-v3-f32.gguf
+# compile
+make
+#run
+./tx -m msmarco-distilbert-base-dot-prod-v3-f32.gguf -v -p "I alwas feel like somebody's watching me" # (sic)
+
+GGUF Header Info
+ Magic number:   1179993927
+ Version:            3
+ Tensor Count:                   101
+ Key-Value Pairs:                    15
+ general.architecture                                            
+ distilbert                                                      
+ general.name                                                    
+ DistilBert                                                      
+ distilbert.context_length                                       
+         512
+ distilbert.embedding_length                                     
+         768
+ distilbert.feed_forward_length                                  
+        3072
+ distilbert.block_count                                          
+           6
+ distilbert.attention.head_count                                 
+          12
+ distilbert.attention.head_count_kv                              
+           1
+ general.file_type                                               
+           0
+ tokenizer.ggml.model                                            
+ gpt2                                                            
+ tokenizer.ggml.tokens                                           
+       30522
+ tokenizer.ggml.token_type                                       
+       30522
+ tokenizer.ggml.unknown_token_id                                 
+         100
+ tokenizer.ggml.seperator_token_id                               
+         102
+ tokenizer.ggml.padding_token_id                                 
+           0
+ Position      573471
+ Deficit          30
+ data offset      573473
+ Embedding dimension:          768
+ Hidden dimension:         3072
+ Layers:            6
+ Heads:           12
+ kv Heads:            1
+ Vocabulary Size:        30522
+ Sequence Length:          512
+ head size           64
+ kv head Size           64
+ loaded word embedding weights:    23440896
+ loaded position embedding weights:      393216
+ loaded embedding layernorm weights:         768
+ loaded embedding layernorm bias:         768
+ loaded wq weights:     3538944
+ loaded wq bias:        4608
+ loaded wk weights:     3538944
+ loaded wk bias:        4608
+ loaded wv weights:     3538944
+ loaded wv bias:        4608
+ loaded wo weights:     3538944
+ loaded wo bias:        4608
+ loaded sa layernorm weights:        4608
+ loaded sa layernorm bias:        4608
+ loaded w1 weights:    14155776
+ loaded w1 bias:       18432
+ loaded w2 (down) weights:    14155776
+ loaded w2 (down) bias:        4608
+ loaded output norm weights:        4608
+ loaded output norm bias:        4608
+ loaded classifier weights:      589824
+ loading tokens
+found 30522 tokens
+ maximum token length           18
+Token 4081 is andrew                                                          
+ simple token: i                 
+ wordpiece tokens: i                 
+ simple token: alwas             
+ wordpiece tokens: al                ##was             
+ simple token: feel              
+ wordpiece tokens: feel              
+ simple token: like              
+ wordpiece tokens: like              
+ simple token: somebody          
+ wordpiece tokens: somebody          
+ simple token: '                 
+ wordpiece tokens: '                 
+ simple token: s                 
+ wordpiece tokens: s                 
+ simple token: watching          
+ wordpiece tokens: watching          
+ simple token: me                
+ wordpiece tokens: me                
+         102        1046        2633       17312        2515        2067        8308        1006        1056        3667        2034         103
+  0.117702775      0.268108070     -0.412374288     -0.684159577     -0.272519588     -0.633238137 ...
+```
 
 Right now I've only tested it with the `msmarco-distilbert-base-dot-prod-v3` model from sbert.net. This is a DistilBbert transformer with a pooling and linear layer used for generating embeddings for semantic search. See https://www.sbert.net/docs/pretrained-models/msmarco-v3.html for more information. 
-
-First clone this repo and install sentence_transformers, ie
-
-```bash
-pip install -U sentence-transformers
-``` 
-
-Download the model from HF:
-
-```bash
-git clone https://huggingface.co/sentence-transformers/msmarco-distilbert-base-dot-prod-v3
-```
-
-Use the included conversion utility to convert the pytorch model into a binary file of the weights (the first argument is the model directory, the second is the desired output file, and the third the tokenizer file to be saved:
-
-```bash
-python savemodel.py msmarco-distilbert-base-dot-prod-v3 msmarco-distilbert-base-dot-prod-v3_converted_full.bin tokenizer.bin 
-```
-
-Compile (I've only tried it with gfortran)
-
-```bash
-gfortran transformer.f90 -o tx
-```
 
 Command line arguments are as follows:
 
@@ -63,51 +144,24 @@ case ('-q', '--quiet')
 
 ```
 
-Run it!
+## Getting models
+
+Models are in gguf format, see https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
+
+You can use the `convert-hf-to-gguf.py` file from https://github.com/rbitr/llama.cpp to convery HF model files, ie 
 
 ```bash
-./tx -m msmarco-distilbert-base-dot-prod-v3_converted_full.bin -v -p "London has 9,787,426 inhabitants at the 2011 census" 
- Embedding dimension:          768
- Hidden dimension:         3072
- Layers:            6
- Heads:           12
- Vocabulary Size:        30522
- Sequence Length:          512
- loaded model, size:     66952704
-Read 30522 tokens
-Token 4081 is andrew            
- simple token: london            
- wordpiece tokens: london            
- simple token: has               
- wordpiece tokens: has               
- simple token: 9                 
- wordpiece tokens: 9                 
- simple token: ,                 
- wordpiece tokens: ,                 
- simple token: 787               
- wordpiece tokens: 78                ##7               
- simple token: ,                 
- wordpiece tokens: ,                 
- simple token: 426               
- wordpiece tokens: 42                ##6               
- simple token: inhabitants       
- wordpiece tokens: inhabitants       
- simple token: at                
- wordpiece tokens: at                
- simple token: the               
- wordpiece tokens: the               
- simple token: 2011              
- wordpiece tokens: 2011              
- simple token: census            
- wordpiece tokens: census            
-         102        2415        2039        1024        1011        6276        2582        1011        4414        2576        4865        2013        1997        2250        2884         103
- -0.332902431     -0.272951126       4.48168665E-02 -0.250538945     -0.169711486     -0.203746051     -0.336311400      0.418903947     -0.290213227 
-...
+git clone https://github.com/rbitr/llama.cpp
+# get the model
+git clone https://huggingface.co/sentence-transformers/msmarco-distilbert-base-dot-prod-v3
+# convert
+python ./llama.cpp/convert-hf-to-gguf.py msmarco-distilbert-base-dot-prod-v3 --outtype f32
 ```
 
+Note that only distilbert models are supported and it has not been extensively tested. Support is currently limited to the fork referenced above, it's not part of the original repo.
 
 
-## Examples
+## Examples (currently using the old model file format, adjust accordingly)
 
 Included in the repo is a file `sentence_ex` made up of some sentences from wikipedia about Europe and the saxoaphone. We save temporary embeddings for each sentence with a bash one-liner:
 
